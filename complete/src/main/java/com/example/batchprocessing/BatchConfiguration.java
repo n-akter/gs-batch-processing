@@ -62,15 +62,25 @@ public class BatchConfiguration {
 			.dataSource(dataSource)
 			.build();
 	}
+	
+	@Bean
+	public JdbcBatchItemWriter<Person> nameWriter(DataSource dataSource) {
+		return new JdbcBatchItemWriterBuilder<Person>()
+			.itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
+			.sql("INSERT INTO people (first_name, last_name) VALUES (:firstName, :lastName)")
+			.dataSource(dataSource)
+			.build();
+	}
 	// end::readerwriterprocessor[]
 
 	// tag::jobstep[]
 	@Bean
-	public Job importUserJob(JobCompletionNotificationListener listener, Step step1) {
+	public Job importUserJob(JobCompletionNotificationListener listener, Step step1, Step step2) {
 		return jobBuilderFactory.get("importUserJob")
 			.incrementer(new RunIdIncrementer())
 			.listener(listener)
 			.flow(step1)
+			.next(step2)
 			.end()
 			.build();
 	}
@@ -84,5 +94,35 @@ public class BatchConfiguration {
 			.writer(writer)
 			.build();
 	}
+	
+	@Bean
+	public Step step2(JdbcBatchItemWriter<Person> nameWriter) {
+		return stepBuilderFactory.get("step2")
+			.<Person, Person> chunk(10)
+			.reader(reader())
+			.processor(processor())
+			.writer(nameWriter)
+			.build();
+	}
 	// end::jobstep[]
+
+	@Bean
+	public Job importUserAgainJob(JobCompletionNotificationListener listener, Step stepOne) {
+		return jobBuilderFactory.get("importUserAgainJob")
+			.incrementer(new RunIdIncrementer())
+			.listener(listener)
+			.flow(stepOne)
+			.end()
+			.build();
+	}
+
+	@Bean
+	public Step stepOne(JdbcBatchItemWriter<Person> writer) {
+		return stepBuilderFactory.get("stepOne")
+			.<Person, Person> chunk(10)
+			.reader(reader())
+			.processor(processor())
+			.writer(writer)
+			.build();
+	}
 }
